@@ -10,18 +10,35 @@ class CompletionOptions(BaseModel):
 
     temperature: float = 0.0
     top_p: float = 1.0
-    n: int = 1
+    n: int = Field(default=1, ge=1)
     stop: Optional[List[str]] = None
-    max_tokens: int = 16
+    max_tokens: Optional[int] = None
     stream: bool = False
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
     logit_bias: Optional[Dict[str, float]] = Field(default_factory=dict)
 
 
-class Message(BaseModel):
-    role: str
-    content: str
+from typing import Any, Union
+
+
+# Define JSON Schema Object Model
+class JSONSchema(BaseModel):
+    type: str
+    properties: Optional[Dict[str, Any]]
+    items: Optional[Any]
+    additionalProperties: Optional[Union[bool, Dict[str, Any]]]
+    required: Optional[List[str]]
+    enum: Optional[List[Any]]
+    default: Optional[Any]
+    description: Optional[str]
+    format: Optional[str]
+
+
+class Function(BaseModel):
+    name: str = Field(..., max_length=64, regex=r"^[a-zA-Z0-9_-]+$")
+    description: Optional[str] = None
+    parameters: JSONSchema
 
 
 class FunctionCall(BaseModel):
@@ -29,10 +46,15 @@ class FunctionCall(BaseModel):
     arguments: str
 
 
+class Message(BaseModel):
+    role: str
+    content: Optional[str] = None
+    function_call: Optional[FunctionCall] = None
+
+
 class Choice(BaseModel):
     index: int
     message: Message
-    function_call: Optional[FunctionCall] = None
     finish_reason: str
 
 
@@ -68,11 +90,12 @@ class OpenAIResponse(BaseModel):
 
     @property
     def first(self):
-        return self.choices[0].message.content if self.choices else None
+        # Note: n >= 1, choices >= 1
+        return self.choices[0].message.content
 
     @property
     def first_choice(self):
-        return self.choices[0] if self.choices else None
+        return self.choices[0]
 
 
 class OpenAIResponseChunk(BaseModel):
@@ -84,4 +107,4 @@ class OpenAIResponseChunk(BaseModel):
 
     @property
     def first(self):
-        return self.choices[0].delta.content if self.choices else None
+        return self.choices[0].delta.content

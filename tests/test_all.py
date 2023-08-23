@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from unittest.mock import patch, MagicMock
 
@@ -97,3 +98,62 @@ def test_log_response(api):
     with patch.object(loguru_logger, "info") as mock_logger:
         api._log_response(0, [], {}, MagicMock())  # Assuming OpenAIResponse
         mock_logger.assert_called_once()
+
+
+def test_call_with_function(api):
+    mock_function_response = {
+        "name": "get_current_weather",
+        "arguments": json.dumps(
+            {"location": "San Francisco, CA", "unit": "fahrenheit"}
+        ),
+    }
+
+    mock_openai_response = {
+        "id": "some_id",
+        "object": "chat.completion",
+        "created": 123,
+        "model": "gpt-3.5-turbo",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "content",
+                    "function_call": mock_function_response,
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    }
+
+    with patch(
+        "openai.ChatCompletion.create", return_value=mock_openai_response
+    ) as mock_openai_create:
+        response = api(
+            ["What's the weather like in San Francisco, CA?"],
+            functions=[
+                {
+                    "name": "get_current_weather",
+                    "description": "Get the current weather in a given location",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {
+                                "type": "string",
+                                "description": "The city and state, e.g. San Francisco, CA",
+                            },
+                            "unit": {
+                                "type": "string",
+                                "enum": ["celsius", "fahrenheit"],
+                            },
+                        },
+                        "required": ["location"],
+                    },
+                }
+            ],
+        )
+
+    assert mock_openai_create.called
+    assert response.first_choice.message.function_call is not None
+    assert response.first_choice.message.function_call == mock_function_response

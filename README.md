@@ -14,22 +14,22 @@ WispChat is a Pythonic client library for the OpenAI GPT API. Without introducin
 ## Usage
 ### Initialization
 ```python
-from wispchat import ChatAPI
+from wispchat import WispChat
 
-api = ChatAPI(model_name="gpt-3.5-turbo", api_key="YOUR_API_KEY")
+llm = WispChat(model_name="gpt-3.5-turbo", api_key="YOUR_API_KEY")
 ```
 
 ### Non-Streaming Interaction
 You can interact with the OpenAI API in a non-streaming manner as follows:
 ```python
-response = api(["Hello, how are you?"], options={"max_tokens": 50})
+response = llm(["Hello, how are you?"], options={"max_tokens": 50})
 print(response.first)
 ```
 
 ### Streaming Interaction
 To interact in a streaming manner, you can use the stream method:
 ```python
-for chunk in api.stream(["Hello, how are you?"], options={"max_tokens": 50}):
+for chunk in llm.stream(["Hello, how are you?"], options={"max_tokens": 50}):
     print(chunk.first)
 ```
 
@@ -41,20 +41,20 @@ WispChat offers four different scope methods to temporarily change system prompt
 `Context Scope`: Use the `override_system_tip` context manager to override system prompts within a specific code block.
 
 ```python
-with api.override_system_tip("You are a dog."):
-    response = api(["Woof!"])
+with llm.override_system_tip("You are a dog."):
+    response = llm(["Woof!"])
 ```
 `Decorator Scope`: Use the `with_system_tip` decorator to override system prompts within a specific function or method.
 
 ```python
-@api.with_system_tip("You are a dog.")
+@llm.with_system_tip("You are a dog.")
 def some_function():
-    response = api(["Woof!"])
+    response = llm(["Woof!"])
 ```
 `Function Scope`: Override system prompts within a specific call using parameters.
 
 ```python
-response = api(["Hello, how are you?"], system_tip="You are a dog.")
+response = llm(["Hello, how are you?"], system_tip="You are a dog.")
 ```
 These methods allow you to flexibly manage system prompts and ensure that the correct prompts guide the model's behavior in different contexts.
 
@@ -80,7 +80,7 @@ print(response.first_choice)  # Prints the first choice
 
 #### Examples
 ```python
-response = api(["Hello, how are you?"], options={"max_tokens": 50, "n": 2})
+response = llm(["Hello, how are you?"], options={"max_tokens": 50, "n": 2})
 print(response.first)      # Prints the content of the first choice
 print(response.contents)   # Prints all choices' contents when n > 1
 ```
@@ -112,7 +112,7 @@ Description: Allows users to have multi-turn dialogues with the OpenAI GPT model
 Status: Planned
 ### Function Call Support
 Description: Adds support for Function Calls, enabling users to interact with the model more flexibly and call specific functions.
-Status: Planned
+Status: ~~Planned~~Done
 
 ## How to Contribute
 We welcome anyone to contribute to WispChat's development. Here are the steps to get started:

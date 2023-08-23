@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import threading
@@ -17,7 +18,7 @@ from tenacity import (
     wait_random_exponential,
 )
 
-from .schema import CompletionOptions, OpenAIResponse, OpenAIResponseChunk
+from .schema import CompletionOptions, OpenAIResponse, OpenAIResponseChunk, Function
 
 
 class WishChat:
@@ -82,6 +83,7 @@ class WishChat:
         self,
         user_messages: List[str],
         options: Optional[Dict[str, Any]] = None,
+        functions: Optional[List[Dict[str, Any]]] = None,
         system_tip: Optional[str] = None,
     ) -> OpenAIResponse:
         """
@@ -92,6 +94,7 @@ class WishChat:
             options (Optional[Dict[str, Any]]): Optional parameters for the completion.
                 Note: The 'stream' option is always set to False in this method and should not be provided.
                 If 'stream' is provided in the options and set to True, it will be ignored.
+            functions (Optional[List[Dict[str, Any]]]): Optional list of functions to call.
             system_tip (Optional[str]): A system tip to guide the model's behavior.
 
         Returns:
@@ -111,7 +114,7 @@ class WishChat:
             options = {}
         options["stream"] = False
 
-        return self.completion(user_messages, options, system_tip)
+        return self.completion(user_messages, options, functions=functions, system_tip=system_tip)
 
     def stream(
         self,
@@ -153,6 +156,7 @@ class WishChat:
         user_messages: List[str],
         options: Optional[Dict[str, Any]] = None,
         system_tip: Optional[str] = None,
+        functions: Optional[List[Dict[str, Any]]] = None,
     ) -> OpenAIResponse | Iterator[OpenAIResponseChunk]:
         """
         Constructs and sends a completion request to the OpenAI API.
@@ -170,6 +174,7 @@ class WishChat:
         and calls the OpenAI API with these messages.
         """
         verified_options = CompletionOptions(**options) if options else None
+        verified_functions = [Function(**function) for function in functions] if functions else None
 
         system_tip = system_tip or getattr(self._local, "system_tip", self.system_tip)
 
@@ -180,7 +185,7 @@ class WishChat:
             messages.append({"role": "user", "content": content})
 
         response = self._call_openai_api(
-            messages, vars(verified_options) if options else {}
+            messages, vars(verified_options) if options else {}, functions
         )
 
         return response
@@ -198,9 +203,19 @@ class WishChat:
         ),
     )
     def _call_openai_api(
-        self, messages: List[Dict[str, str]], api_params: Dict[str, Any]
+        self,
+        messages: List[Dict[str, str]],
+        api_params: Dict[str, Any],
+        functions: Optional[List[Dict[str, Any]]] = None,
     ) -> OpenAIResponse | Iterator[OpenAIResponseChunk]:
+        if functions:
+            function_call = "auto"
+        else:
+            function_call = "none"
         start_time = time.perf_counter()
+        if functions:
+            api_params["functions"] = functions
+            api_params["function_call"] = function_call
         response = openai.ChatCompletion.create(
             model=self.model_name, messages=messages, **api_params
         )
