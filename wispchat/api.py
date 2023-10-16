@@ -21,16 +21,37 @@ from tenacity import (
 from .schema import CompletionOptions, OpenAIResponse, OpenAIResponseChunk, Function
 
 
+SUPPORTED_API_TYPES = ["openai", "azure"]
+API_TYPE_AZURE = "azure"
+API_TYPE_OPENAI = "openai"
+
+
 class WishChat:
     def __init__(
         self,
         model_name: str = "gpt-3.5-turbo",
+        depolyment_id: str = "gpt-3.5-turbo",
+        api_type: str = API_TYPE_OPENAI,
         api_key: Optional[str] = os.environ.get("OPENAI_API_KEY"),
+        api_base: Optional[str] = os.environ.get("OPENAI_API_BASE"),
+        api_version: Optional[str] = os.environ.get("OPENAI_API_VERSION"),
         system_tip: str = "You are a helpful assistant.",
         enable_logging: bool = False,
     ):
-        openai.api_key = api_key
+        if api_type not in SUPPORTED_API_TYPES:
+            raise ValueError(f"Unsupported API type. Supported types are: {', '.join(SUPPORTED_API_TYPES)}")
+
+        if api_type == API_TYPE_AZURE:
+            self.api_type = api_type
+            openai.api_type = api_type
+            openai.api_key = api_key
+            openai.api_base = api_base
+            openai.api_version = api_version
+        else:
+            self.api_type = api_type
+            openai.api_key = api_key
         self.model_name = model_name
+        self.depolyment_id = depolyment_id
         self.system_tip = system_tip
         self.enable_logging = enable_logging
         self._local = threading.local()
@@ -114,7 +135,9 @@ class WishChat:
             options = {}
         options["stream"] = False
 
-        return self.completion(user_messages, options, functions=functions, system_tip=system_tip)
+        return self.completion(
+            user_messages, options, functions=functions, system_tip=system_tip
+        )
 
     def stream(
         self,
@@ -174,7 +197,9 @@ class WishChat:
         and calls the OpenAI API with these messages.
         """
         verified_options = CompletionOptions(**options) if options else None
-        verified_functions = [Function(**function) for function in functions] if functions else None
+        verified_functions = (
+            [Function(**function) for function in functions] if functions else None
+        )
 
         system_tip = system_tip or getattr(self._local, "system_tip", self.system_tip)
 
@@ -216,9 +241,15 @@ class WishChat:
         if functions:
             api_params["functions"] = functions
             api_params["function_call"] = function_call
-        response = openai.ChatCompletion.create(
-            model=self.model_name, messages=messages, **api_params
-        )
+
+        if self.api_type == API_TYPE_AZURE:
+            response = openai.ChatCompletion.create(
+                deployment_id=self.depolyment_id, messages=messages, **api_params
+            )
+        else:
+            response = openai.ChatCompletion.create(
+                model=self.model_name, messages=messages, **api_params
+            )
         if api_params.get("stream"):
             return self._convert_to_response_chunks(response)
         else:
