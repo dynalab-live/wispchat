@@ -35,11 +35,13 @@ class WishChat:
         api_key: Optional[str] = os.environ.get("OPENAI_API_KEY"),
         api_base: Optional[str] = os.environ.get("OPENAI_API_BASE"),
         api_version: Optional[str] = os.environ.get("OPENAI_API_VERSION"),
-        system_tip: str = "You are a helpful assistant.",
+        system_prompt: str = "You are a helpful assistant.",
         enable_logging: bool = False,
     ):
         if api_type not in SUPPORTED_API_TYPES:
-            raise ValueError(f"Unsupported API type. Supported types are: {', '.join(SUPPORTED_API_TYPES)}")
+            raise ValueError(
+                f"Unsupported API type. Supported types are: {', '.join(SUPPORTED_API_TYPES)}"
+            )
 
         if api_type == API_TYPE_AZURE:
             self.api_type = api_type
@@ -52,7 +54,7 @@ class WishChat:
             openai.api_key = api_key
         self.model_name = model_name
         self.depolyment_id = depolyment_id
-        self.system_tip = system_tip
+        self._system_prompt = system_prompt
         self.enable_logging = enable_logging
         self._local = threading.local()
 
@@ -60,40 +62,40 @@ class WishChat:
             logger.add("log_file.json", format="{message}", serialize=True)
 
     @contextmanager
-    def override_system_tip(self, new_tip: str):
+    def override_system_prompt(self, new_prompt: str):
         """
-        Temporarily overrides the system tip for a specific block of code.
+        Temporarily overrides the system prompt for a specific block of code.
         This is useful for changing the behavior of the model within a specific context.
 
         Args:
-            new_tip (str): The new system tip to use within the context.
+            new_prompt (str): The new system prompt to use within the context.
 
         Usage:
-            with api.override_system_tip("You are a dog."):
-                # Code here will use the new system tip
+            with api.override_system_prompt("You are a dog."):
+                # Code here will use the new system prompt
         """
-        original_tip = getattr(self._local, "system_tip", self.system_tip)
-        self._local.system_tip = new_tip
+        original_prompt = getattr(self._local, "system_prompt", self._system_prompt)
+        self._local.system_prompt = new_prompt
         yield
-        self._local.system_tip = original_tip
+        self._local.system_prompt = original_prompt
 
-    def with_system_tip(self, tip: str):
+    def system_prompt(self, prompt: str):
         """
-        Decorator to temporarily override the system tip for a specific function or method.
+        Decorator to temporarily override the system prompt for a specific function or method.
         This is useful for changing the behavior of the model for a specific function call.
 
         Args:
-            tip (str): The new system tip to use within the decorated function.
+            prompt (str): The new system prompt to use within the decorated function.
 
         Usage:
-            @api.with_system_tip("You are a dog.")
+            @api.system_prompt("You are a dog.")
             def some_function():
-                # Code here will use the new system tip
+                # Code here will use the new system prompt
         """
 
         def decorator(func):
             def wrapper(*args, **kwargs):
-                with self.override_system_tip(tip):
+                with self.override_system_prompt(prompt):
                     return func(*args, **kwargs)
 
             return wrapper
@@ -105,7 +107,7 @@ class WishChat:
         user_messages: List[str],
         options: Optional[Dict[str, Any]] = None,
         functions: Optional[List[Dict[str, Any]]] = None,
-        system_tip: Optional[str] = None,
+        system_prompt: Optional[str] = None,
     ) -> OpenAIResponse:
         """
         Initiates a non-streaming interaction with the OpenAI Chat API.
@@ -116,7 +118,7 @@ class WishChat:
                 Note: The 'stream' option is always set to False in this method and should not be provided.
                 If 'stream' is provided in the options and set to True, it will be ignored.
             functions (Optional[List[Dict[str, Any]]]): Optional list of functions to call.
-            system_tip (Optional[str]): A system tip to guide the model's behavior.
+            system_prompt (Optional[str]): A system prompt to guide the model's behavior.
 
         Returns:
             OpenAIResponse: The response from the API.
@@ -136,14 +138,14 @@ class WishChat:
         options["stream"] = False
 
         return self.completion(
-            user_messages, options, functions=functions, system_tip=system_tip
+            user_messages, options, functions=functions, system_prompt=system_prompt
         )
 
     def stream(
         self,
         user_messages: List[str],
         options: Optional[Dict[str, Any]] = None,
-        system_tip: Optional[str] = None,
+        system_prompt: Optional[str] = None,
     ) -> Iterator[OpenAIResponseChunk]:
         """
         Initiates a streaming interaction with the OpenAI Chat API.
@@ -153,7 +155,7 @@ class WishChat:
             options (Optional[Dict[str, Any]]): Optional parameters for the completion.
                 Note: The 'stream' option is always set to True in this method and cannot be overridden.
                 If 'stream' is provided in the options and set to False, it will be ignored and a warning will be issued.
-            system_tip (Optional[str]): A system tip to guide the model's behavior.
+            system_prompt (Optional[str]): A system prompt to guide the model's behavior.
 
         Returns:
             Iterator[OpenAIResponseChunk]: An iterator over the response chunks from the API.
@@ -172,13 +174,13 @@ class WishChat:
             options = {}
         options["stream"] = True
 
-        return self.completion(user_messages, options, system_tip)
+        return self.completion(user_messages, options, system_prompt)
 
     def completion(
         self,
         user_messages: List[str],
         options: Optional[Dict[str, Any]] = None,
-        system_tip: Optional[str] = None,
+        system_prompt: Optional[str] = None,
         functions: Optional[List[Dict[str, Any]]] = None,
     ) -> OpenAIResponse | Iterator[OpenAIResponseChunk]:
         """
@@ -187,13 +189,13 @@ class WishChat:
         Args:
             user_messages (List[str]): List of user messages for the interaction.
             options (Optional[Dict[str, Any]]): Optional additional options for the completion. Default is None.
-            system_tip (Optional[str]): Optional system tip to guide the model's behavior. Default is None.
+            system_prompt (Optional[str]): Optional system prompt to guide the model's behavior. Default is None.
 
         Returns:
             OpenAIResponse | Iterator[OpenAIResponseChunk]: An OpenAIResponse object or an iterator of OpenAIResponseChunk objects, depending on the call type (stream or not).
 
-        This method takes user messages, optional completion options, and an optional system tip.
-        It verifies the provided options, constructs the messages (including a system message if a tip is provided),
+        This method takes user messages, optional completion options, and an optional system prompt.
+        It verifies the provided options, constructs the messages (including a system message if a prompt is provided),
         and calls the OpenAI API with these messages.
         """
         verified_options = CompletionOptions(**options) if options else None
@@ -201,11 +203,13 @@ class WishChat:
             [Function(**function) for function in functions] if functions else None
         )
 
-        system_tip = system_tip or getattr(self._local, "system_tip", self.system_tip)
+        system_prompt = system_prompt or getattr(
+            self._local, "system_prompt", self._system_prompt
+        )
 
         messages = []
-        if system_tip:
-            messages.append({"role": "system", "content": system_tip})
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
         for content in user_messages:
             messages.append({"role": "user", "content": content})
 
